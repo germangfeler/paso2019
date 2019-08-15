@@ -11,7 +11,7 @@ library("leaflet")
 library("tidyverse")
 
 ## Seteamos el directorio de trabajo
-setwd("/home/paso2019/120819-054029/")
+setwd("/home/datos/paso2019/120819-054029/")
 
 ##----------- Cargamos los datos ----------
 
@@ -145,19 +145,19 @@ nos <- leaflet(data = argentina) %>%
               popup = contenido_popup)
 nos
               
-## Mapa Consenso
+## Mapa FIT
 contenido_popup <- paste0("<strong>Provincia: </strong>", 
                       argentina$NAME_1, 
                       "<br><strong>Votos: </strong>", 
-                      argentina$`CONSENSO FEDERAL`,
+                      argentina$`FRENTE DE IZQUIERDA Y DE TRABAJADORES - UNIDAD`,
                       " <strong>%</strong>")
 pal <- colorQuantile(palette = "Purples", domain = NULL, n = 5)
                       
-cf <- leaflet(data = argentina) %>%
+fit <- leaflet(data = argentina) %>%
   addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(fillColor = ~pal(`CONSENSO FEDERAL`), 
+  addPolygons(fillColor = ~pal(`FRENTE DE IZQUIERDA Y DE TRABAJADORES - UNIDAD`), 
               fillOpacity = 0.8, 
               color = "#BDBDC3", 
               weight = 1, 
               popup = contenido_popup)
-cf              
+fit              
