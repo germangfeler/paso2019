@@ -25,10 +25,15 @@ desc_post <- read_delim("descripcion_postulaciones.dsv", delim="|")
 desc_post
 glimpse(desc_post)
 
-## Descripcion ergiones 
+## Descripcion regiones 
 desc_reg <- read_delim("descripcion_regiones.dsv", delim="|")
 desc_reg
 glimpse(desc_reg)
+
+## Voto por categoria (blanco, impugnado, etc) 
+vcat <- read_delim("mesas_totales.dsv", delim="|")
+vcat
+glimpse(vcat)
 
 ## Codigos provincias
 desc_prov <- data.frame(CODIGO_DISTRITO = c("02", "04", "21", "01", "13", 
@@ -42,27 +47,35 @@ PROV = c("Buenos Aires", "Córdoba", "Santa Fe", "Ciudad de Buenos Aires","Mendo
 
 ##----------- Unimos dato con descripcion ----------
 
-## Agregamos descripcion de categoria
-categoria <- desc_post %>%
-   select(CODIGO_CATEGORIA, NOMBRE_CATEGORIA) %>%
-   distinct()
-
-mesas <- left_join(mesas_lista, categoria, by="CODIGO_CATEGORIA") %>%
-                   select(CODIGO_DISTRITO, CODIGO_SECCION, CODIGO_AGRUPACION, NOMBRE_CATEGORIA, VOTOS_LISTA)
-
 ## Agregamos descripcion de agrup politica
 agrup <- desc_post %>%
    select(CODIGO_AGRUPACION, NOMBRE_AGRUPACION) %>%
    distinct()
                    
-mesas <- left_join(mesas, agrup, by="CODIGO_AGRUPACION") %>%
-                   select(CODIGO_DISTRITO, CODIGO_SECCION, NOMBRE_CATEGORIA, NOMBRE_AGRUPACION, VOTOS_LISTA)
+mesas <- left_join(mesas_lista, agrup, by="CODIGO_AGRUPACION") %>%
+          select(-CODIGO_AGRUPACION, -CODIGO_LISTA)
+
+## Agregamos el voto en blanco
+vblanco <- vcat %>% 
+   filter(CONTADOR == "VB") %>%
+   rename("VOTOS_LISTA" = VALOR) %>%
+   mutate(NOMBRE_AGRUPACION = "EN BLANCO") %>%
+   select(-CONTADOR)
+
+mesas <- bind_rows(mesas, vblanco) %>% arrange(CODIGO_MESA)
+
+## Agregamos descripcion de categoria (presidente, diputados, etc)
+categoria <- desc_post %>%
+   select(CODIGO_CATEGORIA, NOMBRE_CATEGORIA) %>%
+   distinct()
+
+mesas <- left_join(mesas, categoria, by="CODIGO_CATEGORIA") %>%
+                   select(CODIGO_DISTRITO, CODIGO_SECCION, NOMBRE_AGRUPACION, NOMBRE_CATEGORIA, VOTOS_LISTA)
 
 ## Agregamos nombre de provincia
 mesas <- left_join(mesas, desc_prov, by="CODIGO_DISTRITO") %>%
                    select(PROV, CODIGO_SECCION, NOMBRE_CATEGORIA, NOMBRE_AGRUPACION, VOTOS_LISTA)
 
-                   
 ## Agregamos localidad
 reg <- desc_reg %>%
    select(CODIGO_REGION, NOMBRE_REGION) %>%
@@ -72,10 +85,13 @@ reg <- desc_reg %>%
 mesas <- left_join(mesas, reg, by="CODIGO_SECCION") %>%
                    select(PROV, NOMBRE_REGION, NOMBRE_CATEGORIA, NOMBRE_AGRUPACION, VOTOS_LISTA)
                    
+## Nos quedamos solo con los resultados presidenciales                   
 mesas <- mesas %>% filter(NOMBRE_CATEGORIA == "Presidente y Vicepresidente de la República")
 
 glimpse(mesas)
 
+## Borro de memoria los objetos originales
+rm(agrup, categoria, desc_post, desc_prov, mesas_lista, vblanco, reg, desc_reg, vcat)
 
 ##----------- Algunos calculos simples ----------
 

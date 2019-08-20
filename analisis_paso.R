@@ -25,6 +25,11 @@ desc_post <- read_delim("descripcion_postulaciones.dsv", delim="|")
 desc_post
 glimpse(desc_post)
 
+## Voto por categoria (blanco, impugnado, etc) 
+vcat <- read_delim("mesas_totales.dsv", delim="|")
+vcat
+glimpse(vcat)
+
 ## Codigos provincias
 desc_prov <- data.frame(CODIGO_DISTRITO = c("02", "04", "21", "01", "13", 
 "23", "08", "17", "14", "05", "22", "06", "18", "16", "15", "10", 
@@ -37,30 +42,43 @@ PROV = c("Buenos Aires", "Córdoba", "Santa Fe", "Ciudad de Buenos Aires","Mendo
 
 ##----------- Unimos dato con descripcion ----------
 
-## Agregamos descripcion de categoria
-categoria <- desc_post %>%
-   select(CODIGO_CATEGORIA, NOMBRE_CATEGORIA) %>%
-   distinct()
-
-mesas <- left_join(mesas_lista, categoria, by="CODIGO_CATEGORIA") %>%
-                   select(CODIGO_DISTRITO, CODIGO_AGRUPACION, NOMBRE_CATEGORIA, VOTOS_LISTA)
-
 ## Agregamos descripcion de agrup politica
 agrup <- desc_post %>%
    select(CODIGO_AGRUPACION, NOMBRE_AGRUPACION) %>%
    distinct()
                    
-mesas <- left_join(mesas, agrup, by="CODIGO_AGRUPACION") %>%
-                   select(CODIGO_DISTRITO,NOMBRE_CATEGORIA, NOMBRE_AGRUPACION, VOTOS_LISTA)
+mesas <- left_join(mesas_lista, agrup, by="CODIGO_AGRUPACION") %>%
+          select(-CODIGO_AGRUPACION, -CODIGO_LISTA)
+
+## Agregamos el voto en blanco
+vblanco <- vcat %>% 
+   filter(CONTADOR == "VB") %>%
+   rename("VOTOS_LISTA" = VALOR) %>%
+   mutate(NOMBRE_AGRUPACION = "EN BLANCO") %>%
+   select(-CONTADOR)
+
+mesas <- bind_rows(mesas, vblanco) %>% arrange(CODIGO_MESA)
+
+## Agregamos descripcion de categoria (presidente, diputados, etc)
+categoria <- desc_post %>%
+   select(CODIGO_CATEGORIA, NOMBRE_CATEGORIA) %>%
+   distinct()
+
+mesas <- left_join(mesas, categoria, by="CODIGO_CATEGORIA") %>%
+                   select(CODIGO_DISTRITO, NOMBRE_AGRUPACION, NOMBRE_CATEGORIA, VOTOS_LISTA)
+
 
 ## Agregamos nombre de provincia
 mesas <- left_join(mesas, desc_prov, by="CODIGO_DISTRITO") %>%
                    select(PROV,NOMBRE_CATEGORIA, NOMBRE_AGRUPACION, VOTOS_LISTA)
-                   
+
+## Nos quedamos solo con los resultados presidenciales                   
 mesas <- mesas %>% filter(NOMBRE_CATEGORIA == "Presidente y Vicepresidente de la República")
 
 glimpse(mesas)
 
+## Borro de memoria los objetos originales
+rm(agrup, categoria, desc_post, desc_prov, mesas_lista, vblanco, vcat)
 
 ##----------- Algunos calculos simples ----------
 
@@ -151,7 +169,7 @@ contenido_popup <- paste0("<strong>Provincia: </strong>",
                       "<br><strong>Votos: </strong>", 
                       argentina$`FRENTE DE IZQUIERDA Y DE TRABAJADORES - UNIDAD`,
                       " <strong>%</strong>")
-pal <- colorQuantile(palette = "Purples", domain = NULL, n = 5)
+pal <- colorQuantile(palette = "Reds", domain = NULL, n = 5)
                       
 fit <- leaflet(data = argentina) %>%
   addProviderTiles("CartoDB.Positron") %>%
