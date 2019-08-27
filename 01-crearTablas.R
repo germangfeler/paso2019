@@ -1,17 +1,15 @@
 ##----------------------------------------------------------------------
-## Analisis PASO
-## Resultados descargados desde https://www.resultados2019.gob.ar/
+## Analisis PASO - creacion de tablas de datos a partir de los 
+## resultados descargados desde https://www.resultados2019.gob.ar/
 ## Analisis: German Gonzalez
 ## Fecha creacion: 13/08/2019
 ##----------------------------------------------------------------------
 
 ## Cargamos los paquetes 
-library("raster")
-library("leaflet")
 library("tidyverse")
 
 ## Seteamos el directorio de trabajo
-setwd("/home/datos/paso2019/120819-054029/")
+setwd("/home/paso2019/120819-054029/")
 
 ##----------- Cargamos los datos ----------
 
@@ -29,6 +27,11 @@ glimpse(desc_post)
 vcat <- read_delim("mesas_totales.dsv", delim="|")
 vcat
 glimpse(vcat)
+
+## Descripcion regiones 
+desc_reg <- read_delim("descripcion_regiones.dsv", delim="|")
+desc_reg
+glimpse(desc_reg)
 
 ## Codigos provincias
 desc_prov <- data.frame(CODIGO_DISTRITO = c("02", "04", "21", "01", "13", 
@@ -59,123 +62,44 @@ vblanco <- vcat %>%
 
 mesas <- bind_rows(mesas, vblanco) %>% arrange(CODIGO_MESA)
 
+## Agregamos nombre de provincia
+mesas <- left_join(mesas, desc_prov, by="CODIGO_DISTRITO") %>%
+                   select(-CODIGO_DISTRITO)
+glimpse(mesas)
+
+## Agregamos seccion
+sec <- desc_reg %>%
+   select(CODIGO_REGION, NOMBRE_REGION) %>%
+   rename(CODIGO_SECCION = CODIGO_REGION, SECCION=NOMBRE_REGION) %>%
+   distinct()
+                   
+mesas <- left_join(mesas, sec, by="CODIGO_SECCION") %>%
+                   select(-CODIGO_SECCION)
+
+## Agregamos circuito
+cir <- desc_reg %>%
+   select(CODIGO_REGION, NOMBRE_REGION) %>%
+   rename(CODIGO_CIRCUITO = CODIGO_REGION, CIRCUITO=NOMBRE_REGION) %>%
+   distinct()
+                   
+mesas <- left_join(mesas, cir, by="CODIGO_CIRCUITO") %>%
+                   select(-CODIGO_CIRCUITO)
+                   
 ## Agregamos descripcion de categoria (presidente, diputados, etc)
 categoria <- desc_post %>%
    select(CODIGO_CATEGORIA, NOMBRE_CATEGORIA) %>%
    distinct()
 
 mesas <- left_join(mesas, categoria, by="CODIGO_CATEGORIA") %>%
-                   select(CODIGO_DISTRITO, NOMBRE_AGRUPACION, NOMBRE_CATEGORIA, VOTOS_LISTA)
+                   select(PROV, SECCION, CIRCUITO, NOMBRE_CATEGORIA, NOMBRE_AGRUPACION, VOTOS_LISTA)
 
-
-## Agregamos nombre de provincia
-mesas <- left_join(mesas, desc_prov, by="CODIGO_DISTRITO") %>%
-                   select(PROV,NOMBRE_CATEGORIA, NOMBRE_AGRUPACION, VOTOS_LISTA)
-
+                   
 ## Nos quedamos solo con los resultados presidenciales                   
 mesas <- mesas %>% filter(NOMBRE_CATEGORIA == "Presidente y Vicepresidente de la República")
 
 glimpse(mesas)
 
-## Borro de memoria los objetos originales
-rm(agrup, categoria, desc_post, desc_prov, mesas_lista, vblanco, vcat)
+##------ Guardamos en archivo ------
 
-##----------- Algunos calculos simples ----------
+save(mesas, file="tabla_paso.Rdata")
 
-## Sumamos las mesas a nivel de provincia
-xprov <- mesas %>% select(PROV, NOMBRE_AGRUPACION, VOTOS_LISTA) %>% 
-          group_by(PROV, NOMBRE_AGRUPACION) %>% 
-          summarize(VOTOS=sum(VOTOS_LISTA)) %>%
-          arrange(PROV, desc(VOTOS)) 
-          
-xprov
-
-## Calculamos porcentajes
-xprov %<>% 
-    group_by(PROV) %>%
-    mutate(PCT=round(VOTOS / sum(VOTOS) * 100,2)) %>%
-    ungroup()    
-  
-#write_excel_csv(xprov, "xprov.csv")
-
-xprov_wide <- xprov %>%
-   select(-VOTOS) %>%
-   spread(NOMBRE_AGRUPACION, PCT)
-
- ##----------- Creamos mapa --------------
-
-
-## Obtengo el mapa
-argentina <- getData("GADM", country="Argentina", level=1)
-
-## Incluyo los votos en la tabla del mapa
-argentina@data <- left_join(argentina@data, xprov_wide, by=c("NAME_1" = "PROV"))
-
-
-## Mapa Juntos por el Cambio
-contenido_popup <- paste0("<strong>Provincia: </strong>", 
-                      argentina$NAME_1, 
-                      "<br><strong>Votos: </strong>", 
-                      argentina$`JUNTOS POR EL CAMBIO`,
-                      " <strong>%</strong>")
-pal <- colorQuantile(palette = "Oranges", domain = NULL, n = 5)
-                      
-jxc <- leaflet(data = argentina) %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(fillColor = ~pal(`JUNTOS POR EL CAMBIO`), 
-              fillOpacity = 0.8, 
-              color = "#BDBDC3", 
-              weight = 1, 
-              popup = contenido_popup)
-jxc
-
-## Mapa Frente de Todos
-contenido_popup <- paste0("<strong>Provincia: </strong>", 
-                      argentina$NAME_1, 
-                      "<br><strong>Votos: </strong>", 
-                      argentina$`FRENTE DE TODOS`,
-                      " <strong>%</strong>")
-pal <- colorQuantile(palette = "Blues", domain = NULL, n = 5)
-                      
-fdt <- leaflet(data = argentina) %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(fillColor = ~pal(`FRENTE DE TODOS`), 
-              fillOpacity = 0.8, 
-              color = "#BDBDC3", 
-              weight = 1, 
-              popup = contenido_popup)
-fdt
-
-## Mapa NOS
-contenido_popup <- paste0("<strong>Provincia: </strong>", 
-                      argentina$NAME_1, 
-                      "<br><strong>Votos: </strong>", 
-                      argentina$`FRENTE NOS`,
-                      " <strong>%</strong>")
-pal <- colorQuantile(palette = "Purples", domain = NULL, n = 5)
-                      
-nos <- leaflet(data = argentina) %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(fillColor = ~pal(`FRENTE NOS`), 
-              fillOpacity = 0.8, 
-              color = "#BDBDC3", 
-              weight = 1, 
-              popup = contenido_popup)
-nos
-              
-## Mapa FIT
-contenido_popup <- paste0("<strong>Provincia: </strong>", 
-                      argentina$NAME_1, 
-                      "<br><strong>Votos: </strong>", 
-                      argentina$`FRENTE DE IZQUIERDA Y DE TRABAJADORES - UNIDAD`,
-                      " <strong>%</strong>")
-pal <- colorQuantile(palette = "Reds", domain = NULL, n = 5)
-                      
-fit <- leaflet(data = argentina) %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(fillColor = ~pal(`FRENTE DE IZQUIERDA Y DE TRABAJADORES - UNIDAD`), 
-              fillOpacity = 0.8, 
-              color = "#BDBDC3", 
-              weight = 1, 
-              popup = contenido_popup)
-fit              
